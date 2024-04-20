@@ -25,9 +25,6 @@ app.use(
     ].join(" ")
   })
 )
-
-const PORT = 3001
-
 // Hardcoded list of phonebook entries
 const phonebookEntries = [
   {
@@ -144,6 +141,7 @@ function generateRandomId() {
 }
 
 // Start the server
+const PORT = process.env.PORT || 3001
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`)
 })
