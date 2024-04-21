@@ -1,7 +1,10 @@
 const express = require("express")
-const app = express()
 const morgan = require("morgan")
 const cors = require("cors")
+const path = require("path")
+
+const app = express()
+const baseUrl = "/api/persons" // Define your base URL here
 
 // Middleware setup
 app.use(cors())
@@ -25,6 +28,10 @@ app.use(
     ].join(" ")
   })
 )
+
+// Serve static files from the 'dist' directory
+app.use(express.static(path.join(__dirname, "dist")))
+
 // Hardcoded list of phonebook entries
 const phonebookEntries = [
   {
@@ -59,90 +66,69 @@ const phonebookEntries = [
   },
 ]
 
-// Endpoint to get phonebook entries
-app.get("/api/persons", (req, res) => {
+// Define API routes
+app.get(baseUrl, (req, res) => {
   res.json(phonebookEntries)
 })
 
-// Endpoint to get phonebook entries
-app.get("/api/persons/:id", (req, res) => {
+app.get(`${baseUrl}/:id`, (req, res) => {
   const id = parseInt(req.params.id)
-  // Find the entry with the given ID
   const entry = phonebookEntries.find((entry) => entry.id === id)
-
-  // If the entry is not found, respond with a 404 status code
   if (!entry) {
     return res.status(404).json({ error: "Person not found" })
   }
-
-  // Respond with the information for the found entry
   res.json(entry)
 })
+
+// Other API routes go here...
 
 // Endpoint for /info
 app.get("/info", (req, res) => {
   const requestTime = new Date()
   const entryCount = phonebookEntries.length
-
   const infoMessage = `<p>Phonebook has info for ${entryCount} people</p>
                       <p>${requestTime}</p>`
-
   res.send(infoMessage)
 })
 
 // Endpoint to delete a phonebook entry by ID
-app.delete("/api/persons/:id", (req, res) => {
+app.delete(`${baseUrl}/:id`, (req, res) => {
   const id = parseInt(req.params.id)
-  // Find the index of the entry with the given ID
   const index = phonebookEntries.findIndex((entry) => entry.id === id)
-
-  // If the entry is not found, respond with a 404 status code
   if (index === -1) {
     return res.status(404).json({ error: "Person not found" })
   }
-
-  // Remove the entry from the phonebookEntries array
   const deletedEntry = phonebookEntries.splice(index, 1)
-
-  // Respond with the deleted entry
   res.json(deletedEntry[0])
 })
 
 // Endpoint to add a new phonebook entry
-app.post("/api/persons", (req, res) => {
+app.post(baseUrl, (req, res) => {
   const body = req.body
-
-  // Check if name or number is missing
   if (!body.name || !body.number) {
     return res.status(400).json({ error: "Name and number are required" })
   }
-
-  // Check if the name already exists in the phonebook
   const nameExists = phonebookEntries.some((entry) => entry.name === body.name)
   if (nameExists) {
     return res.status(400).json({ error: "Name must be unique" })
   }
-
   const newEntry = {
     id: generateRandomId(),
     name: body.name,
     number: body.number,
   }
-
   phonebookEntries.push(newEntry)
-
   res.json(newEntry)
 })
 
 // Function to generate a random ID
 function generateRandomId() {
-  // Use a big enough range to minimize the likelihood of duplicate IDs
   return Math.floor(Math.random() * 1000000)
 }
 
 // Simple route to test server
-app.get('/', (req, res) => {
-  res.send('Hello World!')
+app.get("/", (req, res) => {
+  res.send("Hello World!")
 })
 
 // Start the server
