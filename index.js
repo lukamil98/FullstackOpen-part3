@@ -34,7 +34,7 @@ app.use(express.static(path.join(__dirname, "dist")))
 
 // Enable CORS for specific origin and methods
 const corsOptions = {
-  origin: "https://frontend-phonebook-ybi4.onrender.com",
+  origin: "https://submission-repository.onrender.com",
   methods: ["GET", "POST", "PUT", "DELETE"],
 }
 app.use(cors(corsOptions))
