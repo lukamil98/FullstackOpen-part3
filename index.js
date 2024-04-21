@@ -32,6 +32,13 @@ app.use(
 // Serve static files from the 'dist' directory
 app.use(express.static(path.join(__dirname, "dist")))
 
+// Enable CORS for specific origin and methods
+const corsOptions = {
+  origin: "https://frontend-phonebook-ybi4.onrender.com",
+  methods: ["GET", "POST", "PUT", "DELETE"],
+}
+app.use(cors(corsOptions))
+
 // Hardcoded list of phonebook entries
 const phonebookEntries = [
   {
