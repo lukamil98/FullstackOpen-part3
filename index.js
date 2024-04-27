@@ -1,10 +1,13 @@
+require("dotenv").config() // Load the password from .env file
+
 const express = require("express")
 const morgan = require("morgan")
 const cors = require("cors")
 const path = require("path")
+const mongoose = require("mongoose")
 
 const app = express()
-const baseUrl = "/api/persons" // Define your base URL here
+const baseUrl = "/api/persons" // Defined the base URL here
 
 // Middleware setup
 app.use(cors())
@@ -24,7 +27,7 @@ app.use(
       "-",
       tokens["response-time"](req, res),
       "ms",
-      tokens["req-body"](req, res), // Include request body in log
+      tokens["req-body"](req, res), // Included request body in log
     ].join(" ")
   })
 )
@@ -34,108 +37,107 @@ app.use(express.static(path.join(__dirname, "dist")))
 
 // Enable CORS for specific origin and methods
 const corsOptions = {
-  origin: "https://submission-repository.onrender.com",
+  origin: "*",
   methods: ["GET", "POST", "PUT", "DELETE"],
 }
 app.use(cors(corsOptions))
 
-// Hardcoded list of phonebook entries
-const phonebookEntries = [
-  {
-    id: 1,
-    name: "Arto Hellas",
-    number: "040-123456",
-  },
-  {
-    id: 2,
-    name: "Ada Lovelace",
-    number: "39-44-5323523",
-  },
-  {
-    id: 3,
-    name: "Dan Abramov",
-    number: "12-43-234345",
-  },
-  {
-    id: 4,
-    name: "Mary Poppendieck",
-    number: "39-23-6423122",
-  },
-  {
-    id: 5,
-    name: "Luka Poppendieck",
-    number: "33-23-6423122",
-  },
-  {
-    id: 6,
-    name: "Lena Poppendieck",
-    number: "33-23-6423882",
-  },
-]
-
-// Define API routes
-app.get(baseUrl, (req, res) => {
-  res.json(phonebookEntries)
-})
-
-app.get(`${baseUrl}/:id`, (req, res) => {
-  const id = parseInt(req.params.id)
-  const entry = phonebookEntries.find((entry) => entry.id === id)
-  if (!entry) {
-    return res.status(404).json({ error: "Person not found" })
-  }
-  res.json(entry)
-})
-
-// Other API routes go here...
-
-// Endpoint for /info
-app.get("/info", (req, res) => {
-  const requestTime = new Date()
-  const entryCount = phonebookEntries.length
-  const infoMessage = `<p>Phonebook has info for ${entryCount} people</p>
-                      <p>${requestTime}</p>`
-  res.send(infoMessage)
-})
-
-// Endpoint to delete a phonebook entry by ID
-app.delete(`${baseUrl}/:id`, (req, res) => {
-  const id = parseInt(req.params.id)
-  const index = phonebookEntries.findIndex((entry) => entry.id === id)
-  if (index === -1) {
-    return res.status(404).json({ error: "Person not found" })
-  }
-  const deletedEntry = phonebookEntries.splice(index, 1)
-  res.json(deletedEntry[0])
-})
-
-// Endpoint to add a new phonebook entry
-app.post(baseUrl, (req, res) => {
-  const body = req.body
-  if (!body.name || !body.number) {
-    return res.status(400).json({ error: "Name and number are required" })
-  }
-  const nameExists = phonebookEntries.some((entry) => entry.name === body.name)
-  if (nameExists) {
-    return res.status(400).json({ error: "Name must be unique" })
-  }
-  const newEntry = {
-    id: generateRandomId(),
-    name: body.name,
-    number: body.number,
-  }
-  phonebookEntries.push(newEntry)
-  res.json(newEntry)
-})
-
-// Function to generate a random ID
-function generateRandomId() {
-  return Math.floor(Math.random() * 1000000)
+// Function to check if a string is a valid MongoDB ObjectId
+const isValidObjectId = (id) => {
+  return mongoose.Types.ObjectId.isValid(id)
 }
 
-// Simple route to test server
-app.get("/", (req, res) => {
-  res.send("Hello World!")
+// Connect to MongoDB Atlas
+const uri = `mongodb+srv://lukamilanovic:${process.env.MONGODB_PASSWORD}@cluster0.aorxwdw.mongodb.net/lukamilanovic`
+mongoose.connect(uri, { useNewUrlParser: true, useUnifiedTopology: true })
+const connection = mongoose.connection
+connection.once("open", () => {
+  console.log("Connected to MongoDB Atlas")
+})
+
+// Define Mongoose schema and model for phonebook entries
+const phonebookSchema = new mongoose.Schema({
+  name: String,
+  number: String,
+})
+
+// Modify the toJSON method of the schema to transform _id into id
+phonebookSchema.set("toJSON", {
+  transform: (document, returnedObject) => {
+    returnedObject.id = returnedObject._id.toString()
+    delete returnedObject._id
+    delete returnedObject.__v
+  },
+})
+const PhonebookEntry = mongoose.model("PhonebookEntry", phonebookSchema)
+
+// Define API routes
+app.get(baseUrl, async (req, res) => {
+  try {
+    const phonebookEntries = await PhonebookEntry.find({})
+    res.json(phonebookEntries)
+  } catch (error) {
+    console.error(error)
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+// Route handler for adding a new person
+app.post(baseUrl, async (req, res) => {
+  try {
+    const { name, number } = req.body // Extract name and number from request body
+    const newEntry = new PhonebookEntry({ name, number }) // Create a new phonebook entry
+    const savedEntry = await newEntry.save() // Save the new entry to the database
+    res.status(201).json(savedEntry) // Respond with the saved entry and status code 201 (Created)
+  } catch (error) {
+    console.error(error)
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+// Route handler for deleting a person by ID
+app.delete(`${baseUrl}/:id`, async (req, res) => {
+  try {
+    const id = req.params.id // Extract the ID from the request parameters
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ error: "ID parameter is missing" })
+    }
+
+    // Use the extracted ID to delete the entry
+    const deletedEntry = await PhonebookEntry.findByIdAndDelete(id)
+    if (!deletedEntry) {
+      return res.status(404).json({ error: "Person not found" })
+    }
+
+    // Respond with a success message and status code 204 (No Content) to indicate successful deletion
+    res.status(204).end()
+  } catch (error) {
+    console.error(error)
+    res.status(500).json({ error: "Internal server error" })
+  }
+})
+
+// Route handler for updating a person's information by ID
+app.put(`${baseUrl}/:id`, async (req, res) => {
+  try {
+    const id = req.params.id // Extract the ID from the request parameters
+    const { name, number } = req.body // Extract the updated name and number from the request body
+    const updatedEntry = await PhonebookEntry.findByIdAndUpdate(
+      id,
+      { name, number },
+      { new: true } // Set { new: true } to return the updated entry
+    )
+    if (!updatedEntry) {
+      // If the entry with the given ID doesn't exist, respond with 404 (Not Found)
+      return res.status(404).json({ error: "Person not found" })
+    }
+    // Respond with the updated entry and status code 200 (OK)
+    res.status(200).json(updatedEntry)
+  } catch (error) {
+    console.error(error)
+    // If there's an error, respond with status code 500 (Internal Server Error)
+    res.status(500).json({ error: "Internal server error" })
+  }
 })
 
 // Start the server
