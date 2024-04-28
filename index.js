@@ -37,7 +37,7 @@ app.use(express.static(path.join(__dirname, "dist")))
 
 // Enable CORS for specific origin and methods
 const corsOptions = {
-  origin: "*",
+  origin: "http://localhost:5173",
   methods: ["GET", "POST", "PUT", "DELETE"],
 }
 app.use(cors(corsOptions))
@@ -71,7 +71,7 @@ phonebookSchema.set("toJSON", {
 })
 const PhonebookEntry = mongoose.model("PhonebookEntry", phonebookSchema)
 
-// Define API routes
+// Route handler for getting all phonebook entries
 app.get(baseUrl, async (req, res) => {
   try {
     const phonebookEntries = await PhonebookEntry.find({})
@@ -83,15 +83,25 @@ app.get(baseUrl, async (req, res) => {
 })
 
 // Route handler for adding a new person
-app.post(baseUrl, async (req, res) => {
+app.post(baseUrl, async (req, res, next) => {
   try {
     const { name, number } = req.body // Extract name and number from request body
+
+    // Validate the length of the name
+    if (name.length < 3) {
+      const errorMessage = "Name must be at least 3 characters long"
+      // Set a custom property in the response object to indicate the validation error
+      res.validationError = errorMessage
+      // Proceed to the next middleware or route handler without returning a response
+      return next()
+    }
+
+    // Proceed with adding the person if validation passes
     const newEntry = new PhonebookEntry({ name, number }) // Create a new phonebook entry
     const savedEntry = await newEntry.save() // Save the new entry to the database
     res.status(201).json(savedEntry) // Respond with the saved entry and status code 201 (Created)
   } catch (error) {
-    console.error(error)
-    res.status(500).json({ error: "Internal server error" })
+    next(error) // Pass the error to the error handling middleware
   }
 })
 
@@ -138,6 +148,22 @@ app.put(`${baseUrl}/:id`, async (req, res) => {
     // If there's an error, respond with status code 500 (Internal Server Error)
     res.status(500).json({ error: "Internal server error" })
   }
+})
+
+// Middleware to handle validation errors
+app.use((req, res, next) => {
+  if (res.validationError) {
+    return res.status(400).json({ error: res.validationError })
+  }
+  next()
+})
+
+// Middleware to handle errors
+app.use((err, req, res, next) => {
+  console.error(err)
+  res
+    .status(err.status || 500)
+    .json({ error: err.message || "Internal Server Error" })
 })
 
 // Start the server
